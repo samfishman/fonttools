@@ -1602,8 +1602,10 @@ class _DecompressingT2Decompiler(psCharStrings.SimpleT2Decompiler):
     psCharStrings.SimpleT2Decompiler.execute(self, charString)
     decompressed = charString.program[:]
     for idx,expansion in reversed (charString._patches):
+      if decompressed[idx - 1] not in ['callsubr', 'callgsubr']:
+        import pdb; pdb.set_trace()
       assert idx >= 2
-      assert decompressed[idx - 1] in ['callsubr', 'callgsubr']
+      assert decompressed[idx - 1] in ['callsubr', 'callgsubr'], decompressed[idx - 1]
       assert type(decompressed[idx - 2]) == int
       if expansion[-1] == 'return':
         expansion = expansion[:-1]
@@ -1691,14 +1693,6 @@ def prune_post_subset(self, options):
         charstring.drop_hints()
       del css
 
-      if options.decompress:
-        for g in font.charset:
-          c,sel = cs.getItemAndSelector(g)
-          subrs = getattr(c.private, "Subrs", [])
-          decompiler = _DecompressingT2Decompiler(subrs, c.globalSubrs)
-          decompiler.execute(c)
-          c.program = c._decompressed
-
       # Drop font-wide hinting values
       all_privs = []
       if hasattr(font, 'FDSelect'):
@@ -1711,6 +1705,18 @@ def prune_post_subset(self, options):
                   'StemSnapH', 'StemSnapV', 'StdHW', 'StdVW']:
           if hasattr(priv, k):
             setattr(priv, k, None)
+
+    if options.decompress:
+      for g in font.charset:
+        c,sel = cs.getItemAndSelector(g)
+        # Make sure it's decompiled.  We want our "decompiler" to walk
+        # the program, not the bytecode.
+        c.draw(basePen.NullPen())
+        subrs = getattr(c.private, "Subrs", [])
+        decompiler = _DecompressingT2Decompiler(subrs, c.globalSubrs)
+        decompiler.execute(c)
+        c.program = c._decompressed
+
 
     #
     # Renumber subroutines to remove unused ones
