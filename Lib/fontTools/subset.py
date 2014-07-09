@@ -17,6 +17,7 @@ import sys
 import struct
 import time
 import array
+import functools
 
 
 def _add_method(*clazzes):
@@ -2165,6 +2166,26 @@ def save_font(font, outfile, options):
   font.flavor = options.flavor
   font.save(outfile, reorderTables=options.canonical_order)
 
+def get_unicode(g):
+  if g.startswith('uni') and len(g) > 3:
+    g = g[3:]
+  elif g.startswith('U+') and len(g) > 2:
+    g = g[2:]
+  return int(g, 16)
+
+def get_gid(g):
+  if g.startswith('gid') and len(g) > 3:
+    g = g[3:]
+  elif g.startswith('glyph') and len(g) > 5:
+    g = g[5:]
+  return int(g)
+
+def get_glyph_name(gid, font):
+  try:
+    return font.getGlyphName(gid, requireReal=True)
+  except ValueError:
+    raise Exception("Invalid glyph identifier: %d" % gid)
+
 def main(args):
 
   log = Logger()
@@ -2206,22 +2227,20 @@ def main(args):
       text += g[7:]
       continue
     if g.startswith('uni') or g.startswith('U+'):
-      if g.startswith('uni') and len(g) > 3:
-        g = g[3:]
-      elif g.startswith('U+') and len(g) > 2:
-        g = g[2:]
-      u = int(g, 16)
-      unicodes.append(u)
+      if '-' in g:
+        uni_range = map(get_unicode, g.split('-'))
+        uni_range = range(uni_range[0], uni_range[1] + 1)
+        unicodes.extend(uni_range)
+      else:
+        unicodes.append(get_unicode(g))
       continue
     if g.startswith('gid') or g.startswith('glyph'):
-      if g.startswith('gid') and len(g) > 3:
-        g = g[3:]
-      elif g.startswith('glyph') and len(g) > 5:
-        g = g[5:]
-      try:
-        glyphs.append(font.getGlyphName(int(g), requireReal=True))
-      except ValueError:
-        raise Exception("Invalid glyph identifier: %s" % g)
+      if '-' in g:
+        gid_range = map(get_gid, g.split('-'))
+        gid_range = range(gid_range[0], gid_range[1] + 1)
+        glyphs.extend(map(functools.partial(get_glyph_name, font=font), gid_range))
+      else:
+        glyphs.append(get_glyph_name(get_gid(g), font))
       continue
     raise Exception("Invalid glyph identifier: %s" % g)
   log.lapse("compile glyph list")
