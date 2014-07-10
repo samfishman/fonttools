@@ -493,22 +493,22 @@ def __classify_context(self):
         Coverage = lambda r: r.Coverage
         ChainCoverage = lambda r: r.Coverage
         ContextData = lambda r:(r.ClassDef,)
-        ChainContextData = lambda r:(r.LookAheadClassDef,
-                                      r.InputClassDef,
-                                      r.BacktrackClassDef)
+        ChainContextData = lambda r:(r.BacktrackClassDef,
+                                     r.InputClassDef,
+                                     r.LookAheadClassDef)
         RuleData = lambda r:(r.Class,)
-        ChainRuleData = lambda r:(r.LookAhead, r.Input, r.Backtrack)
+        ChainRuleData = lambda r:(r.Backtrack, r.Input, r.LookAhead)
         def SetRuleData(r, d):(r.Class,) = d
-        def ChainSetRuleData(r, d):(r.LookAhead, r.Input, r.Backtrack) = d
+        def ChainSetRuleData(r, d):(r.Backtrack, r.Input, r.LookAhead) = d
       elif Format == 3:
         Coverage = lambda r: r.Coverage[0]
         ChainCoverage = lambda r: r.InputCoverage[0]
         ContextData = None
         ChainContextData = None
         RuleData = lambda r: r.Coverage
-        ChainRuleData = lambda r:(r.LookAheadCoverage +
-                                   r.InputCoverage +
-                                   r.BacktrackCoverage)
+        ChainRuleData = lambda r:(r.BacktrackCoverage +
+                                  r.InputCoverage +
+                                  r.LookAheadCoverage)
         SetRuleData = None
         ChainSetRuleData = None
       else:
@@ -536,7 +536,8 @@ def __classify_context(self):
         self.RuleCount = ChainTyp+'ClassRuleCount'
         self.RuleSet = ChainTyp+'ClassSet'
         self.RuleSetCount = ChainTyp+'ClassSetCount'
-        self.Intersect = lambda glyphs, c, r: c.intersect_class(glyphs, r)
+        self.Intersect = lambda glyphs, c, r: (c.intersect_class(glyphs, r) if c
+                                               else (set(glyphs) if r == 0 else set()))
 
         self.ClassDef = 'InputClassDef' if Chain else 'ClassDef'
         self.ClassDefIndex = 1 if Chain else 0
@@ -665,7 +666,7 @@ def subset_glyphs(self, s):
     if not self.Coverage.subset(s.glyphs):
       return False
     ContextData = c.ContextData(self)
-    klass_maps = [x.subset(s.glyphs, remap=True) for x in ContextData]
+    klass_maps = [x.subset(s.glyphs, remap=True) if x else None for x in ContextData]
 
     # Keep rulesets for class numbers that survived.
     indices = klass_maps[c.ClassDefIndex]
