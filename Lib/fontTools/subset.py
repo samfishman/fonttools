@@ -1981,7 +1981,17 @@ def prune_post_subset(self, options):
           if hasattr(priv, k):
             setattr(priv, k, None)
 
-    if options.decompress:
+    requires_decompress = False
+    if options.resubroutinize and not options.decompress:
+      # check if there are any subroutines that must be decomped
+      td = self.cff.topDictIndex[0]
+      has_subrs = lambda fd: hasattr(fd, 'Subrs') and len(fd.Subrs) > 0
+      has_priv_subrs = (hasattr(td, 'FDArray') and
+                        any(has_subrs(fd) for fd in td.FDArray))
+      if len(td.GlobalSubrs) > 0 or has_priv_subrs:
+        requires_decompress = True
+
+    if options.decompress or requires_decompress:
       for g in font.charset:
         c,sel = cs.getItemAndSelector(g)
         # Make sure it's decompiled.  We want our "decompiler" to walk
