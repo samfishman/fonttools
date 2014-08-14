@@ -12,6 +12,7 @@ import sys
 import struct
 import time
 import array
+import functools
 
 __usage__ = "pyftsubset font-file [glyph...] [--option=value]..."
 
@@ -1856,6 +1857,62 @@ class _DehintingT2Decompiler(psCharStrings.SimpleT2Decompiler):
         else:
           hints.last_hint = index - 2 # Leave the subr call in
 
+class _DecompressingT2Decompiler(psCharStrings.SimpleT2Decompiler):
+
+  def __init__(self, localSubrs, globalSubrs):
+    psCharStrings.SimpleT2Decompiler.__init__(self,
+                                              localSubrs,
+                                              globalSubrs)
+
+  def execute(self, charString):
+    # Note: Currently we recompute _decompressed each time.  This
+    # is more robust in some cases, but in other places we assume
+    # that each subroutine always expands to the same code, so
+    # maybe it doesn't matter.  To speed up we can just not
+    # recompute _decompressed if it's there.  For now I just
+    # double-check that it decompressed to the same thing.
+    old_decompressed = charString._decompressed if hasattr(charString, '_decompressed') else None
+
+    charString._patches = []
+    psCharStrings.SimpleT2Decompiler.execute(self, charString)
+    decompressed = charString.program[:]
+    for idx,expansion in reversed (charString._patches):
+      if decompressed[idx - 1] not in ['callsubr', 'callgsubr']:
+        import pdb; pdb.set_trace()
+      assert idx >= 2
+      assert decompressed[idx - 1] in ['callsubr', 'callgsubr'], decompressed[idx - 1]
+      assert type(decompressed[idx - 2]) == int
+      if expansion[-1] == 'return':
+        expansion = expansion[:-1]
+      decompressed[idx-2:idx] = expansion
+    if 'endchar' in decompressed:
+      # Cut off after first endchar
+      decompressed = decompressed[:decompressed.index('endchar') + 1]
+    else:
+      if not len(decompressed) or decompressed[-1] != 'return':
+        decompressed.append('return')
+
+    charString._decompressed = decompressed
+    del charString._patches
+
+    if old_decompressed:
+      assert decompressed == old_decompressed
+
+  def op_callsubr(self, index):
+    subr = self.localSubrs[self.operandStack[-1]+self.localBias]
+    psCharStrings.SimpleT2Decompiler.op_callsubr(self, index)
+    self.processSubr(index, subr)
+
+  def op_callgsubr(self, index):
+    subr = self.globalSubrs[self.operandStack[-1]+self.globalBias]
+    psCharStrings.SimpleT2Decompiler.op_callgsubr(self, index)
+    self.processSubr(index, subr)
+
+  def processSubr(self, index, subr):
+    cs = self.callingStack[-1]
+    cs._patches.append((index, subr._decompressed))
+
+
 @_add_method(ttLib.getTableClass('CFF '))
 def prune_post_subset(self, options):
   cff = self.cff
@@ -1909,6 +1966,7 @@ def prune_post_subset(self, options):
         decompiler.execute(c)
       for charstring in css:
         charstring.drop_hints()
+      del css
 
       # Drop font-wide hinting values
       all_privs = []
@@ -1922,6 +1980,17 @@ def prune_post_subset(self, options):
                   'StemSnapH', 'StemSnapV', 'StdHW', 'StdVW']:
           if hasattr(priv, k):
             setattr(priv, k, None)
+
+    if options.decompress:
+      for g in font.charset:
+        c,sel = cs.getItemAndSelector(g)
+        # Make sure it's decompiled.  We want our "decompiler" to walk
+        # the program, not the bytecode.
+        c.draw(basePen.NullPen())
+        subrs = getattr(c.private, "Subrs", [])
+        decompiler = _DecompressingT2Decompiler(subrs, c.globalSubrs)
+        decompiler.execute(c)
+        c.program = c._decompressed
 
 
     #
@@ -2125,6 +2194,7 @@ class Options(object):
   recalc_timestamp = False # Recalculate font modified timestamp
   canonical_order = False # Order tables as recommended
   flavor = None # May be 'woff'
+  decompress = False
 
   def __init__(self, **kwargs):
 
