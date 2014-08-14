@@ -2194,7 +2194,8 @@ class Options(object):
   recalc_timestamp = False # Recalculate font modified timestamp
   canonical_order = False # Order tables as recommended
   flavor = None # May be 'woff'
-  decompress = False
+  decompress = False # Decompress (desubroutinize) - happens before resubr
+  resubroutinize = False # Subroutize after subsetting
 
   def __init__(self, **kwargs):
 
