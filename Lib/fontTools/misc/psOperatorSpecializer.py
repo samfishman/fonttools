@@ -1,4 +1,9 @@
-"""psOperatorSpecializer.py -- tool to specialize genearal T2 operators"""
+"""
+psOperatorSpecializer.py -- tool to specialize general T2 operators
+
+To use, call `specializeOperators` with a CFF TTFont object to
+operate on.
+"""
 
 import collections
 import os
