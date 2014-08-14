@@ -2459,12 +2459,19 @@ class Subsetter(object):
         else:
           self.log(tag, "pruned")
 
+  def _subroutinize_post_subset(self, font):
+    import compreffor
+    subrizer = compreffor.Compreffor(font)
+    subrizer.compress()
+
   def subset(self, font):
 
     self._prune_pre_subset(font)
     self._closure_glyphs(font)
     self._subset_glyphs(font)
     self._prune_post_subset(font)
+    if self.options.resubroutinize:
+      self._subroutinize_post_subset(font)
 
 
 class Logger(object):
